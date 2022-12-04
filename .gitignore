@@ -1,3 +1,23 @@
-/target
+# vscode
+.vscode
+
+# intellij
 .idea
+
+# mac os
+.DS_Store
+
+# generated files
+/target
+
+# configs
+.env
+/configs/local.yaml
+/configs/production.yaml
+
+# notes & logs
+Remarks.txt
+log.json
+
+# other
 tags
