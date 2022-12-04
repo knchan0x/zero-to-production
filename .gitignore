@@ -12,8 +12,8 @@
 
 # configs
 .env
-/configs/local.yaml
-/configs/production.yaml
+/configuration/local.yaml
+/configuration/production.yaml
 
 # notes & logs
 Remarks.txt
