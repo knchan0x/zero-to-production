@@ -2,8 +2,7 @@ use crate::routes::error_chain_fmt;
 use actix_web::http::StatusCode;
 use actix_web::{web, HttpResponse, ResponseError};
 use anyhow::Context;
-use sqlx::PgPool;
-use uuid::Uuid;
+use sqlx::MySqlPool;
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {
@@ -36,7 +35,7 @@ impl ResponseError for ConfirmationError {
 #[tracing::instrument(name = "Confirm a pending subscriber", skip(parameters, pool))]
 pub async fn confirm(
     parameters: web::Query<Parameters>,
-    pool: web::Data<PgPool>,
+    pool: web::Data<MySqlPool>,
 ) -> Result<HttpResponse, ConfirmationError> {
     let subscriber_id = get_subscriber_id_from_token(&pool, &parameters.subscription_token)
         .await
@@ -49,9 +48,13 @@ pub async fn confirm(
 }
 
 #[tracing::instrument(name = "Mark subscriber as confirmed", skip(subscriber_id, pool))]
-pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn confirm_subscriber(pool: &MySqlPool, subscriber_id: uuid::fmt::Hyphenated) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        r#"UPDATE subscriptions SET status = 'confirmed' WHERE id = $1"#,
+        r#"
+        UPDATE `subscriptions` 
+        SET `status` = 'confirmed' 
+        WHERE `id` = ?
+    "#,
         subscriber_id,
     )
     .execute(pool)
@@ -61,11 +64,15 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
 
 #[tracing::instrument(name = "Get subscriber_id from token", skip(subscription_token, pool))]
 pub async fn get_subscriber_id_from_token(
-    pool: &PgPool,
+    pool: &MySqlPool,
     subscription_token: &str,
-) -> Result<Option<Uuid>, sqlx::Error> {
+) -> Result<Option<uuid::fmt::Hyphenated>, sqlx::Error> {
     let result = sqlx::query!(
-        r#"SELECT subscriber_id FROM subscription_tokens WHERE subscription_token = $1"#,
+        r#"
+            SELECT `subscriber_id` as `subscriber_id: uuid::fmt::Hyphenated`
+            FROM `subscription_tokens` 
+            WHERE `subscription_token` = ?
+        "#,
         subscription_token,
     )
     .fetch_optional(pool)

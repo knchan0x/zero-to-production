@@ -19,6 +19,10 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     // Assert
     assert_eq!(200, response.status().as_u16());
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -39,6 +43,10 @@ async fn subscribe_persists_the_new_subscriber() {
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "pending_confirmation");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -57,6 +65,10 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 500);
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -77,6 +89,10 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
 
     // Assert
     // Mock asserts on drop
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -100,6 +116,10 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
 
     // The two links should be identical
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -125,6 +145,10 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             error_message
         );
     }
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -149,4 +173,8 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
             description
         );
     }
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }

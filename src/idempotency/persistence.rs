@@ -2,39 +2,33 @@ use super::IdempotencyKey;
 use actix_web::body::to_bytes;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
-use sqlx::postgres::PgHasArrayType;
-use sqlx::PgPool;
-use sqlx::{Postgres, Transaction};
-use uuid::Uuid;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sqlx::MySqlPool;
+use sqlx::{MySql, Transaction};
 
-#[derive(Debug, sqlx::Type)]
-#[sqlx(type_name = "header_pair")]
+#[derive(Debug, Serialize, Deserialize)]
 struct HeaderPairRecord {
     name: String,
     value: Vec<u8>,
 }
 
-impl PgHasArrayType for HeaderPairRecord {
-    fn array_type_info() -> sqlx::postgres::PgTypeInfo {
-        sqlx::postgres::PgTypeInfo::with_name("_header_pair")
-    }
-}
-
 pub async fn get_saved_response(
-    pool: &PgPool,
+    pool: &MySqlPool,
     idempotency_key: &IdempotencyKey,
-    user_id: Uuid,
+    user_id: uuid::fmt::Hyphenated,
 ) -> Result<Option<HttpResponse>, anyhow::Error> {
     let saved_response = sqlx::query!(
         r#"
-        SELECT 
-            response_status_code as "response_status_code!", 
-            response_headers as "response_headers!: Vec<HeaderPairRecord>",
-            response_body as "response_body!"
-        FROM idempotency
-        WHERE 
-          user_id = $1 AND
-          idempotency_key = $2
+            SELECT 
+                `response_status_code` as `response_status_code!`, 
+                `response_headers` as `response_headers!`,
+                `response_body` as `response_body!`
+            FROM `idempotency`
+            WHERE 
+                `user_id` = ? AND
+                `idempotency_key` = ?
         "#,
         user_id,
         idempotency_key.as_ref()
@@ -44,8 +38,9 @@ pub async fn get_saved_response(
     if let Some(r) = saved_response {
         let status_code = StatusCode::from_u16(r.response_status_code.try_into()?)?;
         let mut response = HttpResponse::build(status_code);
-        for HeaderPairRecord { name, value } in r.response_headers {
-            response.append_header((name, value));
+        for header in r.response_headers.as_array().unwrap() {
+            let unwrap_header: HeaderPairRecord = serde_json::from_value(header.to_owned())?;
+            response.append_header((unwrap_header.name, unwrap_header.value));
         }
         Ok(Some(response.body(r.response_body)))
     } else {
@@ -54,9 +49,9 @@ pub async fn get_saved_response(
 }
 
 pub async fn save_response(
-    mut transaction: Transaction<'static, Postgres>,
+    mut transaction: Transaction<'static, MySql>,
     idempotency_key: &IdempotencyKey,
-    user_id: Uuid,
+    user_id: uuid::fmt::Hyphenated,
     http_response: HttpResponse,
 ) -> Result<HttpResponse, anyhow::Error> {
     let (response_head, body) = http_response.into_parts();
@@ -73,20 +68,20 @@ pub async fn save_response(
     };
     sqlx::query_unchecked!(
         r#"
-        UPDATE idempotency
-        SET 
-            response_status_code = $3, 
-            response_headers = $4,
-            response_body = $5
-        WHERE
-            user_id = $1 AND
-            idempotency_key = $2
+            UPDATE `idempotency`
+            SET 
+                `response_status_code` = ?, 
+                `response_headers` = ?,
+                `response_body` = ?
+            WHERE
+                `user_id` = ? AND
+                `idempotency_key` = ?
         "#,
-        user_id,
-        idempotency_key.as_ref(),
         status_code,
-        headers,
-        body.as_ref()
+        json!(headers),
+        body.as_ref(),
+        user_id,
+        idempotency_key.as_ref()
     )
     .execute(&mut transaction)
     .await?;
@@ -99,28 +94,28 @@ pub async fn save_response(
 #[allow(clippy::large_enum_variant)]
 pub enum NextAction {
     // Return transaction for later usage
-    StartProcessing(Transaction<'static, Postgres>),
+    StartProcessing(Transaction<'static, MySql>),
     ReturnSavedResponse(HttpResponse),
 }
 
 pub async fn try_processing(
-    pool: &PgPool,
+    pool: &MySqlPool,
     idempotency_key: &IdempotencyKey,
-    user_id: Uuid,
+    user_id: uuid::fmt::Hyphenated,
 ) -> Result<NextAction, anyhow::Error> {
     let mut transaction = pool.begin().await?;
     let n_inserted_rows = sqlx::query!(
         r#"
-        INSERT INTO idempotency (
-            user_id, 
-            idempotency_key,
-            created_at
-        ) 
-        VALUES ($1, $2, now()) 
-        ON CONFLICT DO NOTHING
+            INSERT IGNORE INTO `idempotency` (
+                `user_id`, 
+                `idempotency_key`,
+                `created_at`
+            ) 
+            VALUES (?, ?, ?) 
         "#,
         user_id,
-        idempotency_key.as_ref()
+        idempotency_key.as_ref(),
+        Utc::now()
     )
     .execute(&mut transaction)
     .await?

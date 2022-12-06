@@ -5,7 +5,8 @@ use crate::utils::{e500, see_other};
 use actix_web::{web, HttpResponse};
 use actix_web_flash_messages::FlashMessage;
 use anyhow::Context;
-use sqlx::{PgPool, Postgres, Transaction};
+use chrono::Utc;
+use sqlx::{MySql, MySqlPool, Transaction};
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -30,7 +31,7 @@ fn success_message() -> FlashMessage {
 )]
 pub async fn publish_newsletter(
     form: web::Form<FormData>,
-    pool: web::Data<PgPool>,
+    pool: web::Data<MySqlPool>,
     user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let user_id = user_id.into_inner();
@@ -69,27 +70,28 @@ pub async fn publish_newsletter(
 
 #[tracing::instrument(skip_all)]
 async fn insert_newsletter_issue(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, MySql>,
     title: &str,
     text_content: &str,
     html_content: &str,
-) -> Result<Uuid, sqlx::Error> {
-    let newsletter_issue_id = Uuid::new_v4();
+) -> Result<uuid::fmt::Hyphenated, sqlx::Error> {
+    let newsletter_issue_id = Uuid::new_v4().hyphenated();
     sqlx::query!(
         r#"
-        INSERT INTO newsletter_issues (
-            newsletter_issue_id, 
-            title, 
-            text_content, 
-            html_content,
-            published_at
-        )
-        VALUES ($1, $2, $3, $4, now())
+            INSERT INTO `newsletter_issues` (
+                `newsletter_issue_id`, 
+                `title`, 
+                `text_content`, 
+                `html_content`,
+                `published_at`
+            )
+            VALUES (?, ?, ?, ?, ?)
         "#,
         newsletter_issue_id,
         title,
         text_content,
-        html_content
+        html_content,
+        Utc::now(),
     )
     .execute(transaction)
     .await?;
@@ -98,18 +100,18 @@ async fn insert_newsletter_issue(
 
 #[tracing::instrument(skip_all)]
 async fn enqueue_delivery_tasks(
-    transaction: &mut Transaction<'_, Postgres>,
-    newsletter_issue_id: Uuid,
+    transaction: &mut Transaction<'_, MySql>,
+    newsletter_issue_id: uuid::fmt::Hyphenated,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
-        INSERT INTO issue_delivery_queue (
-            newsletter_issue_id, 
-            subscriber_email
-        )
-        SELECT $1, email
-        FROM subscriptions
-        WHERE status = 'confirmed'
+            INSERT INTO `issue_delivery_queue` (
+                `newsletter_issue_id`, 
+                `subscriber_email`
+            )
+            SELECT ?, `email`
+            FROM `subscriptions`
+            WHERE `status` = 'confirmed'
         "#,
         newsletter_issue_id,
     )

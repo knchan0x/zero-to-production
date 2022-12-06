@@ -79,6 +79,10 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     ));
     app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we haven't sent the newsletter email
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -113,6 +117,10 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
     ));
     app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -125,6 +133,10 @@ async fn you_must_be_logged_in_to_see_the_newsletter_form() {
 
     // Assert
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -143,6 +155,10 @@ async fn you_must_be_logged_in_to_publish_a_newsletter() {
 
     // Assert
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -191,6 +207,10 @@ async fn newsletter_creation_is_idempotent() {
 
     app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email **once**
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -227,4 +247,8 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     );
     app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email **once**
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }

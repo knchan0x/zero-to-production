@@ -1,7 +1,7 @@
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use once_cell::sync::Lazy;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use sqlx::{Connection, Executor, MySqlConnection, MySqlPool};
 use uuid::Uuid;
 use wiremock::MockServer;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
@@ -26,7 +26,8 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub port: u16,
-    pub db_pool: PgPool,
+    pub db_name: String,
+    pub db_pool: MySqlPool,
     pub email_server: MockServer,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
@@ -176,6 +177,17 @@ impl TestApp {
         let plain_text = get_link(body["TextBody"].as_str().unwrap());
         ConfirmationLinks { html, plain_text }
     }
+
+    // Drop the test database
+    pub async fn clean_up(&self) {
+        sqlx::query(&format!(r#"DROP DATABASE `{}`"#, self.db_name))
+            .execute(&self.db_pool)
+            .await
+            .expect(&format!(
+                "Failed to drop the test database [{}]",
+                self.db_name
+            ));
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -215,6 +227,7 @@ pub async fn spawn_app() -> TestApp {
     let test_app = TestApp {
         address: format!("http://localhost:{}", application_port),
         port: application_port,
+        db_name: configuration.database.database_name.to_owned(),
         db_pool: get_connection_pool(&configuration.database),
         email_server,
         test_user: TestUser::generate(),
@@ -227,20 +240,20 @@ pub async fn spawn_app() -> TestApp {
     test_app
 }
 
-async fn configure_database(config: &DatabaseSettings) -> PgPool {
+async fn configure_database(config: &DatabaseSettings) -> MySqlPool {
     // Create database
-    let mut connection = PgConnection::connect_with(&config.without_db())
+    let mut connection = MySqlConnection::connect_with(&config.without_db())
         .await
-        .expect("Failed to connect to Postgres");
+        .expect("Failed to connect to MySql");
     connection
-        .execute(&*format!(r#"CREATE DATABASE "{}";"#, config.database_name))
+        .execute(&*format!(r#"CREATE DATABASE `{}`;"#, config.database_name))
         .await
         .expect("Failed to create database.");
 
     // Migrate database
-    let connection_pool = PgPool::connect_with(config.with_db())
+    let connection_pool = MySqlPool::connect_with(config.with_db())
         .await
-        .expect("Failed to connect to Postgres.");
+        .expect("Failed to connect to MySql.");
     sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
@@ -272,7 +285,7 @@ impl TestUser {
         .await;
     }
 
-    async fn store(&self, pool: &PgPool) {
+    async fn store(&self, pool: &MySqlPool) {
         let salt = SaltString::generate(&mut rand::thread_rng());
         // Match production parameters
         let password_hash = Argon2::new(
@@ -284,9 +297,11 @@ impl TestUser {
         .unwrap()
         .to_string();
         sqlx::query!(
-            "INSERT INTO users (user_id, username, password_hash)
-            VALUES ($1, $2, $3)",
-            self.user_id,
+            r#"
+                INSERT INTO `users` (`user_id`, `username`, `password_hash`)
+                VALUES (?, ?, ?)
+            "#,
+            self.user_id.hyphenated().to_string(),
             self.username,
             password_hash,
         )

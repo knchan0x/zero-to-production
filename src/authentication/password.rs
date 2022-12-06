@@ -3,7 +3,7 @@ use anyhow::Context;
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use secrecy::{ExposeSecret, Secret};
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 
 #[derive(thiserror::Error, Debug)]
 pub enum AuthError {
@@ -21,13 +21,13 @@ pub struct Credentials {
 #[tracing::instrument(name = "Get stored credentials", skip(username, pool))]
 async fn get_stored_credentials(
     username: &str,
-    pool: &PgPool,
-) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
+    pool: &MySqlPool,
+) -> Result<Option<(uuid::fmt::Hyphenated, Secret<String>)>, anyhow::Error> {
     let row = sqlx::query!(
         r#"
-        SELECT user_id, password_hash
-        FROM users
-        WHERE username = $1
+            SELECT `user_id` as `user_id: uuid::fmt::Hyphenated`, `password_hash`
+            FROM `users`
+            WHERE `username` = ?
         "#,
         username,
     )
@@ -41,8 +41,8 @@ async fn get_stored_credentials(
 #[tracing::instrument(name = "Validate credentials", skip(credentials, pool))]
 pub async fn validate_credentials(
     credentials: Credentials,
-    pool: &PgPool,
-) -> Result<uuid::Uuid, AuthError> {
+    pool: &MySqlPool,
+) -> Result<uuid::fmt::Hyphenated, AuthError> {
     let mut user_id = None;
     let mut expected_password_hash = Secret::new(
         "$argon2id$v=19$m=15000,t=2,p=1$\
@@ -91,18 +91,18 @@ fn verify_password_hash(
 
 #[tracing::instrument(name = "Change password", skip(password, pool))]
 pub async fn change_password(
-    user_id: uuid::Uuid,
+    user_id: uuid::fmt::Hyphenated,
     password: Secret<String>,
-    pool: &PgPool,
+    pool: &MySqlPool,
 ) -> Result<(), anyhow::Error> {
     let password_hash = spawn_blocking_with_tracing(move || compute_password_hash(password))
         .await?
         .context("Failed to hash password")?;
     sqlx::query!(
         r#"
-        UPDATE users
-        SET password_hash = $1
-        WHERE user_id = $2
+            UPDATE `users`
+            SET `password_hash` = ?
+            WHERE `user_id` = ?
         "#,
         password_hash.expose_secret(),
         user_id

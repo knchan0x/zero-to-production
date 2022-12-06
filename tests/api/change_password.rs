@@ -11,6 +11,10 @@ async fn you_must_be_logged_in_to_see_the_change_password_form() {
 
     // Assert
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -30,6 +34,10 @@ async fn you_must_be_logged_in_to_change_your_password() {
 
     // Assert
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -62,6 +70,10 @@ async fn new_password_fields_must_match() {
         "<p><i>You entered two different new passwords - \
          the field values must match.</i></p>"
     ));
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -93,6 +105,10 @@ async fn current_password_must_be_valid() {
     // Act - Part 3 - Follow the redirect
     let html_page = app.get_change_password_html().await;
     assert!(html_page.contains("<p><i>The current password is incorrect.</i></p>"));
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -138,4 +154,8 @@ async fn changing_password_works() {
     });
     let response = app.post_login(&login_body).await;
     assert_is_redirect_to(&response, "/admin/dashboard");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }

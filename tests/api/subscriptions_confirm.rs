@@ -14,6 +14,10 @@ async fn confirmations_without_token_are_rejected_with_a_400() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 400);
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -37,6 +41,10 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -71,4 +79,8 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "confirmed");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }

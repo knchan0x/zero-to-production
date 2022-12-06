@@ -7,7 +7,7 @@ use anyhow::Context;
 use chrono::Utc;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{MySqlPool, MySql, Transaction};
 use std::convert::{TryFrom, TryInto};
 use uuid::Uuid;
 
@@ -60,7 +60,7 @@ impl ResponseError for SubscribeError {
 )]
 pub async fn subscribe(
     form: web::Form<FormData>,
-    pool: web::Data<PgPool>,
+    pool: web::Data<MySqlPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
@@ -68,7 +68,7 @@ pub async fn subscribe(
     let mut transaction = pool
         .begin()
         .await
-        .context("Failed to acquire a Postgres connection from the pool")?;
+        .context("Failed to acquire a MySql connection from the pool")?;
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
         .await
         .context("Failed to insert new subscriber in the database.")?;
@@ -131,23 +131,24 @@ pub async fn send_confirmation_email(
     skip(new_subscriber, transaction)
 )]
 pub async fn insert_subscriber(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, MySql>,
     new_subscriber: &NewSubscriber,
-) -> Result<Uuid, sqlx::Error> {
+) -> Result<uuid::fmt::Hyphenated, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-    INSERT INTO subscriptions (id, email, name, subscribed_at, status)
-    VALUES ($1, $2, $3, $4, 'pending_confirmation')
-            "#,
-        subscriber_id,
+            INSERT INTO `subscriptions` (`id`, `email`, `name`, `subscribed_at`, `status`)
+            VALUES (?, ?, ?, ?, ?);
+        "#,
+        subscriber_id.hyphenated().to_string(),
         new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
-        Utc::now()
+        Utc::now(),
+        "pending_confirmation"
     )
     .execute(transaction)
     .await?;
-    Ok(subscriber_id)
+    Ok(subscriber_id.hyphenated())
 }
 
 #[tracing::instrument(
@@ -155,17 +156,17 @@ pub async fn insert_subscriber(
     skip(subscription_token, transaction)
 )]
 pub async fn store_token(
-    transaction: &mut Transaction<'_, Postgres>,
-    subscriber_id: Uuid,
+    transaction: &mut Transaction<'_, MySql>,
+    subscriber_id: uuid::fmt::Hyphenated,
     subscription_token: &str,
 ) -> Result<(), StoreTokenError> {
     sqlx::query!(
         r#"
-    INSERT INTO subscription_tokens (subscription_token, subscriber_id)
-    VALUES ($1, $2)
+            INSERT INTO `subscription_tokens` (`subscription_token`, `subscriber_id`)
+            VALUES (?, ?);
         "#,
         subscription_token,
-        subscriber_id
+        subscriber_id.to_string()
     )
     .execute(transaction)
     .await

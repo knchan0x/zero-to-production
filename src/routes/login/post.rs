@@ -8,7 +8,7 @@ use actix_web::web;
 use actix_web::HttpResponse;
 use actix_web_flash_messages::FlashMessage;
 use secrecy::Secret;
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -20,10 +20,10 @@ pub struct FormData {
     skip(form, pool, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
-// We are now injecting `PgPool` to retrieve stored credentials from the database
+// We are now injecting `MySqlPool` to retrieve stored credentials from the database
 pub async fn login(
     form: web::Form<FormData>,
-    pool: web::Data<PgPool>,
+    pool: web::Data<MySqlPool>,
     session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {

@@ -14,7 +14,7 @@ impl TypedSession {
         self.0.renew();
     }
 
-    pub fn insert_user_id(&self, user_id: Uuid) -> Result<(), serde_json::Error> {
+    pub fn insert_user_id(&self, user_id: uuid::fmt::Hyphenated) -> Result<(), serde_json::Error> {
         self.0.insert(Self::USER_ID_KEY, user_id)
     }
 

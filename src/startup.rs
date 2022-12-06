@@ -15,8 +15,8 @@ use actix_web_flash_messages::storage::CookieMessageStore;
 use actix_web_flash_messages::FlashMessagesFramework;
 use actix_web_lab::middleware::from_fn;
 use secrecy::{ExposeSecret, Secret};
-use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use sqlx::mysql::MySqlPoolOptions;
+use sqlx::MySqlPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
@@ -58,8 +58,8 @@ impl Application {
     }
 }
 
-pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
-    PgPoolOptions::new()
+pub fn get_connection_pool(configuration: &DatabaseSettings) -> MySqlPool {
+    MySqlPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_secs(2))
         .connect_lazy_with(configuration.with_db())
 }
@@ -68,7 +68,7 @@ pub struct ApplicationBaseUrl(pub String);
 
 async fn run(
     listener: TcpListener,
-    db_pool: PgPool,
+    db_pool: MySqlPool,
     email_client: EmailClient,
     base_url: String,
     hmac_secret: Secret<String>,

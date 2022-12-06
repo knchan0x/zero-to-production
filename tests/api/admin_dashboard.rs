@@ -10,6 +10,10 @@ async fn you_must_be_logged_in_to_access_the_admin_dashboard() {
 
     // Assert
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }
 
 #[tokio::test]
@@ -40,4 +44,8 @@ async fn logout_clears_session_state() {
     // Act - Part 5 - Attempt to load admin panel
     let response = app.get_admin_dashboard().await;
     assert_is_redirect_to(&response, "/login");
+
+    // clean up
+    // will not be preformed if assert is failed
+    app.clean_up().await;
 }

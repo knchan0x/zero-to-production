@@ -1,9 +1,8 @@
 use crate::{configuration::Settings, startup::get_connection_pool};
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{MySql, MySqlPool, Transaction};
 use std::time::Duration;
 use tracing::{field::display, Span};
-use uuid::Uuid;
 
 pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
     let connection_pool = get_connection_pool(&configuration.database);
@@ -11,7 +10,7 @@ pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), any
     worker_loop(connection_pool, email_client).await
 }
 
-async fn worker_loop(pool: PgPool, email_client: EmailClient) -> Result<(), anyhow::Error> {
+async fn worker_loop(pool: MySqlPool, email_client: EmailClient) -> Result<(), anyhow::Error> {
     loop {
         match try_execute_task(&pool, &email_client).await {
             Ok(ExecutionOutcome::EmptyQueue) => {
@@ -39,7 +38,7 @@ pub enum ExecutionOutcome {
     err
 )]
 pub async fn try_execute_task(
-    pool: &PgPool,
+    pool: &MySqlPool,
     email_client: &EmailClient,
 ) -> Result<ExecutionOutcome, anyhow::Error> {
     let task = dequeue_task(pool).await?;
@@ -83,20 +82,20 @@ pub async fn try_execute_task(
     Ok(ExecutionOutcome::TaskCompleted)
 }
 
-type PgTransaction = Transaction<'static, Postgres>;
+type MySqlTransaction = Transaction<'static, MySql>;
 
 #[tracing::instrument(skip_all)]
 async fn dequeue_task(
-    pool: &PgPool,
-) -> Result<Option<(PgTransaction, Uuid, String)>, anyhow::Error> {
+    pool: &MySqlPool,
+) -> Result<Option<(MySqlTransaction, uuid::fmt::Hyphenated, String)>, anyhow::Error> {
     let mut transaction = pool.begin().await?;
     let r = sqlx::query!(
         r#"
-        SELECT newsletter_issue_id, subscriber_email
-        FROM issue_delivery_queue
-        FOR UPDATE
-        SKIP LOCKED
-        LIMIT 1
+            SELECT `newsletter_issue_id` as `newsletter_issue_id: uuid::fmt::Hyphenated`, `subscriber_email`
+            FROM `issue_delivery_queue`
+            LIMIT 1
+            FOR UPDATE
+            SKIP LOCKED
         "#,
     )
     .fetch_optional(&mut transaction)
@@ -114,16 +113,16 @@ async fn dequeue_task(
 
 #[tracing::instrument(skip_all)]
 async fn delete_task(
-    mut transaction: PgTransaction,
-    issue_id: Uuid,
+    mut transaction: MySqlTransaction,
+    issue_id: uuid::fmt::Hyphenated,
     email: &str,
 ) -> Result<(), anyhow::Error> {
     sqlx::query!(
         r#"
-        DELETE FROM issue_delivery_queue
-        WHERE 
-            newsletter_issue_id = $1 AND
-            subscriber_email = $2 
+            DELETE FROM `issue_delivery_queue`
+            WHERE 
+                `newsletter_issue_id` = ? AND
+                `subscriber_email` = ?
         "#,
         issue_id,
         email
@@ -141,16 +140,19 @@ struct NewsletterIssue {
 }
 
 #[tracing::instrument(skip_all)]
-async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, anyhow::Error> {
+async fn get_issue(
+    pool: &MySqlPool,
+    issue_id: uuid::fmt::Hyphenated,
+) -> Result<NewsletterIssue, anyhow::Error> {
     let issue = sqlx::query_as!(
         NewsletterIssue,
         r#"
-        SELECT title, text_content, html_content
-        FROM newsletter_issues
-        WHERE
-            newsletter_issue_id = $1
+            SELECT `title`, `text_content`, `html_content`
+            FROM `newsletter_issues`
+            WHERE
+                `newsletter_issue_id` = ?
         "#,
-        issue_id
+        issue_id.to_string()
     )
     .fetch_one(pool)
     .await?;

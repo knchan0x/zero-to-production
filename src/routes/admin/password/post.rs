@@ -4,7 +4,7 @@ use crate::utils::{e500, see_other};
 use actix_web::{web, HttpResponse};
 use actix_web_flash_messages::FlashMessage;
 use secrecy::{ExposeSecret, Secret};
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -15,7 +15,7 @@ pub struct FormData {
 
 pub async fn change_password(
     form: web::Form<FormData>,
-    pool: web::Data<PgPool>,
+    pool: web::Data<MySqlPool>,
     user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let user_id = user_id.into_inner();
