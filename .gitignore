@@ -9,7 +9,6 @@
 
 # generated files
 /target
-Cargo.lock
 
 # configs
 .env
