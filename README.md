@@ -4,6 +4,7 @@ Forked form Luca Palmieri's [Zero To Production In Rust](https://github.com/Luke
 
 - Use Rust's default linker
 - Postgres to MySQL
+- Replace bash script by docker compose
 
 ## Remarks
 
@@ -11,6 +12,15 @@ Forked form Luca Palmieri's [Zero To Production In Rust](https://github.com/Luke
 
 ```
 DATABASE_URL="mysql:user:password@localhost:3306/newsletter"
+
+DB_Root_Password=super_user_password
+DB_User=user
+DB_Password=password
+DB_Name=newsletter
+
+App_Base_Url="http://127.0.0.1:8000" # make sure no "/" at the end
+App_Port=8000
+App_Hmac_Secret="super-long-and-secret-random-key-needed-to-verify-message-integrity_production"
 ```
 
 - local configuration file has been removed, please create your own
@@ -36,7 +46,9 @@ email_client:
 
 ## How to use
 
-Refer to instructions on Luca Palmieri's [Zero To Production In Rust](https://github.com/LukeMathWalker/zero-to-production).
+```
+docker-compose build
+docker-compose up -d
 
 ## License
 

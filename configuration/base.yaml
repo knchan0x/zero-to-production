@@ -1,6 +1,8 @@
 application:
+  host: 127.0.0.1
   port: 8000
-  host: 0.0.0.0
+  # make sure no "/" at the end
+  base_url: "http://127.0.0.1"
   hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
 database:
   host: "127.0.0.1"

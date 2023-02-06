@@ -1,0 +1,45 @@
+version: '3'
+
+services:
+  zero2prod:
+    image: ${Image_Name}:${Version}
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    depends_on:
+      - redis_db
+      - mysql_db
+      - db_migration
+    environment:
+      - APP_DATABASE__USERNAME=${DB_User}
+      - APP_DATABASE__PASSWORD=${DB_Password}
+      - APP_DATABASE__HOST=mysql_db
+      - APP_DATABASE__PORT=3306
+      - APP_DATABASE__DATABASE_NAME=${DB_Name}
+      - APP_APPLICATION__PORT=${App_Port}
+      - APP_APPLICATION__BASE_URL=${App_Base_Url}
+      - APP_APPLICATION__HAMC_SECRET=${App_Hmac_Secret}
+      - APP_REDIS_URI=redis://redis_db:6379/
+    ports:
+      - "8000:8000"
+  redis_db:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+  mysql_db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_Root_Password}
+      MYSQL_USER: ${DB_User}
+      MYSQL_PASSWORD: ${DB_Password}
+      MYSQL_DATABASE: ${DB_Name}
+  db_migration:
+    build:
+      context: .
+      dockerfile: ./db_migration/Dockerfile
+    depends_on:
+      - mysql_db
+    environment:
+      DATABASE_URL: mysql://${DB_User}:${DB_Password}@mysql_db:3306/${DB_Name}
